@@ -1,0 +1,35 @@
+# QUNAR Backend Requirements
+# Enhanced with rate limiting and additional features
+
+# Core
+fastapi==0.111.0
+uvicorn[standard]==0.24.0
+python-multipart==0.0.9
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Validation & Settings
+pydantic==2.7.0
+pydantic-settings==2.1.0
+
+# File Upload
+aiofiles==23.2.1
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# Production
+gunicorn==21.2.0
