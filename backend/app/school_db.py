@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
 import random
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -72,6 +75,7 @@ LAST_NAMES = [
 
 DEFAULT_RANDOM_SEED = 20260331
 RNG = random.Random(DEFAULT_RANDOM_SEED)
+STATE_SCHEMA_VERSION = 1
 
 STUDENTS: dict[str, dict[str, Any]] = {}
 TEACHERS: dict[str, dict[str, Any]] = {}
@@ -84,6 +88,104 @@ SOCIAL_POSTS: list[dict[str, Any]] = []
 PORTFOLIO_ITEMS: list[dict[str, Any]] = []
 GENERATED_SCHEDULES: dict[str, dict[str, Any]] = {}
 SCHEDULE_CHANGE_LOG: list[dict[str, Any]] = []
+
+
+def _state_file_path() -> Path:
+    configured = os.getenv("AQBOBEK_STATE_FILE", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parents[1] / "data" / "runtime_state.json"
+
+
+def _reset_runtime_collections(seed: int = DEFAULT_RANDOM_SEED) -> None:
+    RNG.seed(seed)
+    STUDENTS.clear()
+    TEACHERS.clear()
+    STUDENT_ACADEMIC.clear()
+    TOKENS.clear()
+    AUTH_USERS.clear()
+    AUTH_USERS_BY_ID.clear()
+    ANNOUNCEMENTS.clear()
+    SOCIAL_POSTS.clear()
+    PORTFOLIO_ITEMS.clear()
+    GENERATED_SCHEDULES.clear()
+    SCHEDULE_CHANGE_LOG.clear()
+
+
+def _snapshot_runtime_state() -> dict[str, Any]:
+    return {
+        "schema_version": STATE_SCHEMA_VERSION,
+        "students": deepcopy(STUDENTS),
+        "student_academic": deepcopy(STUDENT_ACADEMIC),
+        "auth_users": deepcopy(AUTH_USERS),
+        "auth_users_by_id": deepcopy(AUTH_USERS_BY_ID),
+        "announcements": deepcopy(ANNOUNCEMENTS),
+        "social_posts": deepcopy(SOCIAL_POSTS),
+        "portfolio_items": deepcopy(PORTFOLIO_ITEMS),
+        "generated_schedules": deepcopy(GENERATED_SCHEDULES),
+        "schedule_change_log": deepcopy(SCHEDULE_CHANGE_LOG),
+    }
+
+
+def _apply_runtime_state(payload: dict[str, Any]) -> None:
+    STUDENTS.clear()
+    STUDENTS.update(payload.get("students", {}))
+
+    STUDENT_ACADEMIC.clear()
+    STUDENT_ACADEMIC.update(payload.get("student_academic", {}))
+
+    AUTH_USERS.clear()
+    AUTH_USERS.update(payload.get("auth_users", {}))
+
+    AUTH_USERS_BY_ID.clear()
+    persisted_users_by_id = payload.get("auth_users_by_id", {})
+    if persisted_users_by_id:
+        AUTH_USERS_BY_ID.update(persisted_users_by_id)
+    else:
+        for account in AUTH_USERS.values():
+            user_id = str(account.get("user_id", "")).strip()
+            if user_id:
+                AUTH_USERS_BY_ID[user_id] = deepcopy(account)
+
+    ANNOUNCEMENTS.clear()
+    ANNOUNCEMENTS.extend(payload.get("announcements", []))
+
+    SOCIAL_POSTS.clear()
+    SOCIAL_POSTS.extend(payload.get("social_posts", []))
+
+    PORTFOLIO_ITEMS.clear()
+    PORTFOLIO_ITEMS.extend(payload.get("portfolio_items", []))
+
+    GENERATED_SCHEDULES.clear()
+    GENERATED_SCHEDULES.update(payload.get("generated_schedules", {}))
+
+    SCHEDULE_CHANGE_LOG.clear()
+    SCHEDULE_CHANGE_LOG.extend(payload.get("schedule_change_log", []))
+
+    TOKENS.clear()
+
+
+def _persist_runtime_state() -> None:
+    state_file = _state_file_path()
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(
+        json.dumps(_snapshot_runtime_state(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _restore_runtime_state() -> bool:
+    state_file = _state_file_path()
+    if not state_file.exists():
+        return False
+    try:
+        payload = json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if payload.get("schema_version") != STATE_SCHEMA_VERSION:
+        return False
+    _apply_runtime_state(payload)
+    return True
 
 
 def _now_iso() -> str:
@@ -189,6 +291,7 @@ def _bootstrap_demo_accounts() -> None:
         display_name="Admin Operator",
         email="admin@aqbobek.kz",
         password="admin123",
+        persist=False,
     )
     # Teacher
     teacher = next(iter(TEACHERS.values()))
@@ -198,6 +301,7 @@ def _bootstrap_demo_accounts() -> None:
         email="teacher@aqbobek.kz",
         password="teacher123",
         linked_teacher_id=teacher["id"],
+        persist=False,
     )
     # Demo student + parent pair
     student = next(iter(STUDENTS.values()))
@@ -208,6 +312,7 @@ def _bootstrap_demo_accounts() -> None:
         password="student123",
         linked_student_id=student["id"],
         class_id=student["class_id"],
+        persist=False,
     )
     parent = create_account(
         role="parent",
@@ -216,6 +321,7 @@ def _bootstrap_demo_accounts() -> None:
         password="parent123",
         linked_student_id=student["id"],
         class_id=student["class_id"],
+        persist=False,
     )
     STUDENTS[student["id"]]["parent_ids"].append(parent["user_id"])
 
@@ -271,6 +377,7 @@ def init_school_db() -> None:
     _generate_teachers()
     _generate_students()
     _bootstrap_demo_accounts()
+    _restore_runtime_state()
 
 
 def create_account(
@@ -281,6 +388,7 @@ def create_account(
     linked_student_id: str | None = None,
     linked_teacher_id: str | None = None,
     class_id: str | None = None,
+    persist: bool = True,
 ) -> dict[str, Any]:
     init_school_db()
     normalized_email = _normalize_email(email)
@@ -305,6 +413,8 @@ def create_account(
     }
     AUTH_USERS[normalized_email] = account
     AUTH_USERS_BY_ID[user_id] = account
+    if persist:
+        _persist_runtime_state()
     return deepcopy(account)
 
 
@@ -349,7 +459,9 @@ def register_student(name: str, class_id: str, email: str, password: str) -> dic
         password=password,
         linked_student_id=student_id,
         class_id=class_id,
+        persist=False,
     )
+    _persist_runtime_state()
     return {"student_id": student_id, "account": account}
 
 
@@ -366,8 +478,10 @@ def register_parent(name: str, email: str, password: str, child_student_email: s
         password=password,
         linked_student_id=child["id"],
         class_id=child["class_id"],
+        persist=False,
     )
     child["parent_ids"].append(account["user_id"])
+    _persist_runtime_state()
     return {"parent_user_id": account["user_id"], "linked_student_id": child["id"], "account": account}
 
 
@@ -623,6 +737,7 @@ def create_announcement(
         "created_at": _now_iso(),
     }
     ANNOUNCEMENTS.append(announcement)
+    _persist_runtime_state()
     return deepcopy(announcement)
 
 
@@ -743,6 +858,7 @@ def generate_schedule(class_ids: list[str] | None = None) -> dict[str, Any]:
             "meta": {"class_count": len(selected_classes), "entries": len(entries), "unresolved": len(unresolved)},
         }
     )
+    _persist_runtime_state()
     return payload
 
 
@@ -788,6 +904,7 @@ def create_social_post(student_id: str, author_role: str, author_name: str, cont
         "comments": [],
     }
     SOCIAL_POSTS.append(post)
+    _persist_runtime_state()
     return deepcopy(post)
 
 
@@ -803,6 +920,7 @@ def add_social_comment(post_id: str, author_role: str, author_name: str, text: s
             "created_at": _now_iso(),
         }
         post["comments"].append(comment)
+        _persist_runtime_state()
         return deepcopy(post)
     raise ValueError("Post not found")
 
@@ -826,6 +944,7 @@ def add_portfolio_item(student_id: str, title: str, description: str) -> dict[st
         "verified_at": None,
     }
     PORTFOLIO_ITEMS.append(item)
+    _persist_runtime_state()
     return deepcopy(item)
 
 
@@ -835,6 +954,7 @@ def verify_portfolio_item(item_id: str) -> dict[str, Any]:
             continue
         item["status"] = "verified"
         item["verified_at"] = _now_iso()
+        _persist_runtime_state()
         return deepcopy(item)
     raise ValueError("Portfolio item not found")
 
@@ -884,17 +1004,15 @@ def gamification_leaderboard(limit: int = 20) -> list[dict[str, Any]]:
 
 
 def reset_school_db(seed: int = DEFAULT_RANDOM_SEED) -> dict[str, Any]:
-    RNG.seed(seed)
-    STUDENTS.clear()
-    TEACHERS.clear()
-    STUDENT_ACADEMIC.clear()
-    TOKENS.clear()
-    AUTH_USERS.clear()
-    AUTH_USERS_BY_ID.clear()
-    ANNOUNCEMENTS.clear()
-    SOCIAL_POSTS.clear()
-    PORTFOLIO_ITEMS.clear()
-    GENERATED_SCHEDULES.clear()
-    SCHEDULE_CHANGE_LOG.clear()
+    state_file = _state_file_path()
+    if state_file.exists():
+        state_file.unlink(missing_ok=True)
+    _reset_runtime_collections(seed)
+    init_school_db()
+    return db_stats()
+
+
+def reload_school_db(seed: int = DEFAULT_RANDOM_SEED) -> dict[str, Any]:
+    _reset_runtime_collections(seed)
     init_school_db()
     return db_stats()
