@@ -93,6 +93,17 @@ from .substitution import (
     review_absence_request,
 )
 
+_DEFAULT_CORS_ORIGINS = (
+    "http://localhost:5173,"
+    "http://localhost:5174,"
+    "http://localhost:5175,"
+    "http://localhost:5176,"
+    "http://127.0.0.1:5173,"
+    "http://127.0.0.1:5174,"
+    "http://127.0.0.1:5175,"
+    "http://127.0.0.1:5176"
+)
+
 ALLOWED_ROLES = {"student", "teacher", "parent", "admin"}
 
 EDUPAGE_SCHOOL = os.getenv("EDUPAGE_SCHOOL", "nisaktau").strip()
@@ -101,7 +112,7 @@ EDUPAGE_YEAR_RAW = os.getenv("EDUPAGE_YEAR", "").strip()
 EDUPAGE_TIMEOUT_SECONDS = int(os.getenv("EDUPAGE_TIMEOUT_SECONDS", "25"))
 EDUPAGE_CACHE_TTL_SECONDS = int(os.getenv("EDUPAGE_CACHE_TTL_SECONDS", "300"))
 EDUPAGE_TIMEZONE = os.getenv("EDUPAGE_TIMEZONE", "Asia/Almaty").strip() or "Asia/Almaty"
-CORS_ALLOW_ORIGINS_RAW = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+CORS_ALLOW_ORIGINS_RAW = os.getenv("CORS_ORIGINS", _DEFAULT_CORS_ORIGINS).strip()
 
 EDUPAGE_YEAR: int | None = None
 if EDUPAGE_YEAR_RAW:

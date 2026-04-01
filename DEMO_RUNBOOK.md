@@ -2,10 +2,27 @@
 
 ## 1) Start services
 ```bash
+# from repo root
+npm run setup
+npm run dev
+```
+
+Optional AI setup for live advice/report generation:
+```bash
+cd backend
+cp .env.example .env
+# set AI_API_KEY to your OpenRouter key
+# defaults:
+# AI_MODEL_PRIMARY=stepfun/step-3.5-flash:free
+# AI_MODEL_FALLBACKS=nvidia/nemotron-3-super-120b-a12b:free
+```
+
+Manual alternative:
+```bash
 # backend
 cd backend
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
@@ -15,7 +32,7 @@ npm install
 npm run dev
 ```
 
-PowerShell note (Windows): if execution policy blocks `npm.ps1`, run `npm.cmd install` and `npm.cmd run dev`.
+PowerShell note (Windows): if execution policy blocks `npm.ps1`, run `npm.cmd run setup` and `npm.cmd run dev`.
 
 ## 1.1) Reset baseline before each defense run
 Use one of the options below right before the live demo:

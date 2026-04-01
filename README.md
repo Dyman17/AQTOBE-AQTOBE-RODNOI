@@ -146,7 +146,7 @@
 - Output:
   - Risk score (0–100)
   - Weak knowledge areas
-- LLM (OpenAI):
+- LLM (OpenRouter-compatible models):
   - Personalized recommendations
   - Student feedback explanation
   - Teacher reports generation
@@ -226,7 +226,7 @@ It is an AI-powered decision support system for education:
 - `GET /schedule` (mock schedule JSON)
 - `GET /timetable` (EduPage live feed via RPC; при ошибке auto-fallback на mock)
 - `POST /risk` (custom risk scoring 0-100)
-- `POST /ai-advice` (OpenAI при наличии ключа, иначе fallback)
+- `POST /ai-advice` (OpenRouter при наличии `AI_API_KEY`, иначе fallback)
 - `GET /parent/weekly-summary` (observer-выжимка и рекомендации для родителя)
 - `GET /teacher/early-warning` (список at-risk учеников по классу)
 - `POST /teacher/class-report` (one-click AI report по классу)
@@ -282,10 +282,17 @@ It is an AI-powered decision support system for education:
 
 ### Quick Start
 ```bash
+# From repo root
+npm run setup
+npm run dev
+```
+
+Manual alternative:
+```bash
 # Backend
 cd backend
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
@@ -295,7 +302,16 @@ npm install
 npm run dev
 ```
 
-PowerShell note (Windows): если политика выполнения блокирует `npm.ps1`, используйте `npm.cmd install` и `npm.cmd run dev`.
+Root monorepo scripts:
+- `npm run dev`
+- `npm run dev:backend`
+- `npm run dev:frontend`
+- `npm run setup`
+- `npm run setup:backend`
+- `npm run setup:frontend`
+- `npm run test:scripts`
+
+PowerShell note (Windows): если политика выполнения блокирует `npm.ps1`, используйте `npm.cmd run setup` и `npm.cmd run dev`.
 
 Сброс демо-данных перед защитой:
 ```bash
@@ -304,7 +320,7 @@ python scripts/reset_demo_data.py
 ```
 
 Переменные окружения:
-- `backend/.env.example` -> `OPENAI_API_KEY`, `OPENAI_MODEL`
+- `backend/.env.example` -> `AI_PROVIDER`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL_PRIMARY`, `AI_MODEL_FALLBACKS`
 - `frontend/.env.example` -> `VITE_API_URL`
 - Frontend API/architecture guide: `frontend/README.md`
 - Live demo runbook: `DEMO_RUNBOOK.md`
